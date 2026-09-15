@@ -20,15 +20,28 @@ bool can_loopback = false;
   extern can_ring can_##x; \
   can_ring can_##x = { .w_ptr = 0, .r_ptr = 0, .fifo_size = (size), .elems = (CANPacket_t *)&(elems_##x) };
 
-#define CAN_RX_BUFFER_SIZE 4096U
-#define CAN_TX_BUFFER_SIZE 416U
+// CANPacket_t now carries a 64-byte CAN-FD payload, so the queues below take
+// ~4.5x the RAM they did with the original 8-byte-CAN packet. The full-size
+// H7 queues (RX=4096/TX=416) no longer fit in STM32F4 RAM: the link fails in
+// region `RAM`, and anything large enough to link again pushes `_ebss` past
+// `_estack` (0x2001FFFC), so the descending stack would overlap .bss.
+// STM32F4 therefore uses a proportional, reduced queue set that keeps .bss
+// safely below the initial stack pointer. STM32H7 keeps the full-size queues,
+// and PC/host builds (no STM32 define) keep the H7 defaults too.
+#ifdef STM32F4
+  #define CAN_RX_BUFFER_SIZE 512U
+  #define CAN_TX_BUFFER_SIZE 64U
+#else
+  #define CAN_RX_BUFFER_SIZE 4096U
+  #define CAN_TX_BUFFER_SIZE 416U
+#endif
 
 #ifdef STM32H7
 // ITCM RAM and DTCM RAM are the fastest for Cortex-M7 core access
 __attribute__((section(".axisram"))) can_buffer(rx_q, CAN_RX_BUFFER_SIZE)
 __attribute__((section(".itcmram"))) can_buffer(tx1_q, CAN_TX_BUFFER_SIZE)
 __attribute__((section(".itcmram"))) can_buffer(tx2_q, CAN_TX_BUFFER_SIZE)
-#else  // kept for PC
+#else  // STM32F4 and PC/host builds
 can_buffer(rx_q, CAN_RX_BUFFER_SIZE)
 can_buffer(tx1_q, CAN_TX_BUFFER_SIZE)
 can_buffer(tx2_q, CAN_TX_BUFFER_SIZE)

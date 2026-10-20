@@ -164,3 +164,9 @@ SECTIONS
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }
+
+/* .bss must end below the stack top, which is also the enter_bootloader_mode
+   magic slot. The RAM region is 256K, so the linker alone will not catch an
+   overflow: a growing .bss would silently overlap the stack. */
+ASSERT((_ebss + _Min_Stack_Size) <= 0x2001FFFC,
+       "F4: .bss overlaps the stack top / enter_bootloader_mode magic")

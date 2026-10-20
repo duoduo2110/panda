@@ -16,6 +16,14 @@
 void detect_board_type(void) {
   set_gpio_output(GPIOC, 14, 1);
   set_gpio_output(GPIOC, 5, 1);
+
+  // This F4 target only implements the DOS board. The PB1/PB7 straps are not
+  // reliable on some DOS units, and a failed detection would leave hw_type
+  // unset, making assert_fatal() spin before USB/watchdog init. Default to DOS;
+  // the strap probe below can only ever confirm that.
+  hw_type = HW_TYPE_DOS;
+  current_board = &board_dos;
+
   if (!detect_with_pull(GPIOB, 1, PULL_UP) && !detect_with_pull(GPIOB, 7, PULL_UP)) {
     hw_type = HW_TYPE_DOS;
     current_board = &board_dos;

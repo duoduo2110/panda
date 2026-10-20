@@ -1,7 +1,11 @@
 void clock_init(void) {
   // enable external oscillator
   register_set_bits(&(RCC->CR), RCC_CR_HSEON);
-  while ((RCC->CR & RCC_CR_HSERDY) == 0U);
+  volatile uint32_t hse_timeout = 1000000U;
+  while ((RCC->CR & RCC_CR_HSERDY) == 0U) {
+    if (--hse_timeout == 0U) break;
+  }
+  bool hse_ok = (RCC->CR & RCC_CR_HSERDY) != 0U;
 
   // divide things
   // AHB = 96MHz
@@ -16,11 +20,16 @@ void clock_init(void) {
   // PLLQ: 4
   // P output: 96MHz
   // Q output: 48MHz
-  register_set(&(RCC->PLLCFGR), RCC_PLLCFGR_PLLQ_2 | RCC_PLLCFGR_PLLM_3 | RCC_PLLCFGR_PLLN_6 | RCC_PLLCFGR_PLLN_5 | RCC_PLLCFGR_PLLSRC_HSE, 0x7F437FFFU);
+  // If the HSE never came up, fall back to HSI (also 16MHz, so PLLM=8/PLLN=96
+  // still yields 96MHz) instead of selecting a dead clock source.
+  register_set(&(RCC->PLLCFGR), RCC_PLLCFGR_PLLQ_2 | RCC_PLLCFGR_PLLM_3 | RCC_PLLCFGR_PLLN_6 | RCC_PLLCFGR_PLLN_5 | (hse_ok ? RCC_PLLCFGR_PLLSRC_HSE : 0U), 0x7F437FFFU);
 
   // start PLL
   register_set_bits(&(RCC->CR), RCC_CR_PLLON);
-  while ((RCC->CR & RCC_CR_PLLRDY) == 0U);
+  volatile uint32_t pll_timeout = 1000000U;
+  while ((RCC->CR & RCC_CR_PLLRDY) == 0U) {
+    if (--pll_timeout == 0U) break;
+  }
 
   // Configure Flash prefetch, Instruction cache, Data cache and wait state
   // *** without this, it breaks ***

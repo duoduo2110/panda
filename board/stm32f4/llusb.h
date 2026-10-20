@@ -13,10 +13,20 @@ static void OTG_FS_IRQ_Handler(void) {
 void usb_init(void) {
   REGISTER_INTERRUPT(OTG_FS_IRQn, OTG_FS_IRQ_Handler, 1500000U, FAULT_INTERRUPT_RATE_USB) //TODO: Find out a better rate limit for USB. Now it's the 1.5MB/s rate
 
+  // Full OTG peripheral reset: clears any state left behind by a previous USB
+  // session (e.g. the ST ROM bootloader after DFU). Without this the AHBIDL
+  // wait below can hang when booting after a bootloader session.
+  RCC->AHB2RSTR |= RCC_AHB2RSTR_OTGFSRST;
+  RCC->AHB2RSTR &= ~RCC_AHB2RSTR_OTGFSRST;
+
   // full speed PHY, do reset and remove power down
   /*puth(USBx->GRSTCTL);
   print(" resetting PHY\n");*/
-  while ((USBx->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U);
+  // Bound the AHBIDL wait instead of spinning forever (~100ms at 96MHz).
+  volatile uint32_t ahbidl_timeout = 3000000U;
+  while ((USBx->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U) {
+    if (--ahbidl_timeout == 0U) break;
+  }
   //print("AHB idle\n");
 
   // reset PHY here
